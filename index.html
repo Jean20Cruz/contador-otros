@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario y Ventas</title>
+    <!-- Incluimos Tailwind CSS para un estilo rápido y responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 600px;
+        }
+        .product-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div id="app" class="container mx-auto bg-white p-6 rounded-3xl shadow-2xl space-y-6">
+        <h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6">Control de Bebidas y Helados - Jean Cruz</h1>
+        
+        <!-- Selector de fecha -->
+        <div class="bg-gray-50 p-4 rounded-xl shadow-inner flex items-center justify-between">
+            <label for="inventory-date" class="text-xl font-bold text-gray-700">Fecha:</label>
+            <input type="date" id="inventory-date" class="p-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+        </div>
+
+        <!-- Formulario para agregar nuevos productos -->
+        <div class="bg-blue-50 p-6 rounded-2xl shadow-inner space-y-4">
+            <h2 class="text-2xl font-bold text-gray-800">Agregar Nuevo Producto</h2>
+            <div class="flex flex-col space-y-3">
+                <input type="text" id="product-name" placeholder="Nombre del producto" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                <input type="number" id="product-price" placeholder="Precio (ej: 0.50)" step="0.01" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                <input type="number" id="product-stock" placeholder="Inventario Inicial (ej: 100)" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                <button id="add-product-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Agregar Producto
+                </button>
+            </div>
+        </div>
+
+        <!-- Formulario para recargar inventario -->
+        <div class="bg-green-50 p-6 rounded-2xl shadow-inner space-y-4">
+            <h2 class="text-2xl font-bold text-gray-800">Recargar Inventario</h2>
+            <div class="flex flex-col space-y-3">
+                <select id="reload-product-select" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+                    <option value="" disabled selected>Seleccione un producto</option>
+                </select>
+                <input type="number" id="reload-quantity-input" placeholder="Cantidad a recargar" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+                <button id="reload-stock-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Recargar Inventario
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenedor para la lista de productos -->
+        <div id="products-container" class="space-y-4 mt-6">
+            <!-- Los productos se generarán dinámicamente aquí -->
+        </div>
+
+        <div class="bg-gray-50 p-4 rounded-xl shadow-inner flex items-center justify-between">
+            <span class="text-xl font-bold text-gray-700">Total en Ventas del Día:</span>
+            <span id="total-price" class="text-2xl font-extrabold text-green-600">$0.00</span>
+        </div>
+        
+        <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4 mt-6">
+            <button id="save-invoice-button" class="w-full md:w-1/2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                Guardar Venta del Día
+            </button>
+            <button id="reset-button" class="w-full md:w-1/2 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                Reiniciar Contadores de Venta
+            </button>
+        </div>
+
+        <!-- Historial de ventas/facturas -->
+        <div id="invoices-container" class="mt-8 pt-6 border-t-2 border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Historial de Ventas</h2>
+            <div id="invoice-list" class="space-y-3">
+                <!-- Las facturas se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Claves para localStorage
+        const productListKey = 'productList'; // Lista global de productos
+        const allInventoryDataKey = 'allInventoryData'; // Inventario y ventas por fecha
+        const allInvoicesKey = 'allInvoices'; // Facturas por fecha
+
+        // Variables de estado
+        let products = [];
+        let allInventoryData = {}; // Objeto que mapea fechas a datos de inventario
+        let allInvoices = {};      // Objeto que mapea fechas a listas de facturas
+
+        const productsContainer = document.getElementById('products-container');
+        const totalPriceElement = document.getElementById('total-price');
+        const resetButton = document.getElementById('reset-button');
+        const addProductButton = document.getElementById('add-product-button');
+        const productNameInput = document.getElementById('product-name');
+        const productPriceInput = document.getElementById('product-price');
+        const productStockInput = document.getElementById('product-stock');
+        const saveInvoiceButton = document.getElementById('save-invoice-button');
+        const invoiceList = document.getElementById('invoice-list');
+        const inventoryDateInput = document.getElementById('inventory-date');
+        
+        // Elementos para la nueva funcionalidad de recarga
+        const reloadProductSelect = document.getElementById('reload-product-select');
+        const reloadQuantityInput = document.getElementById('reload-quantity-input');
+        const reloadStockButton = document.getElementById('reload-stock-button');
+
+        // Obtiene el objeto de inventario y ventas para la fecha actual
+        function getCurrentInventoryData() {
+            const date = inventoryDateInput.value;
+            let currentDayInventory = allInventoryData[date];
+
+            // Si no hay datos para esta fecha, los inicializamos
+            if (!currentDayInventory) {
+                let newDayInventory = {};
+                
+                // Si hay productos definidos, procedemos con la lógica de inventario
+                if (products.length > 0) {
+                    // Buscamos la última fecha con datos de inventario guardados
+                    const sortedDates = Object.keys(allInventoryData).sort().filter(d => d < date);
+                    const lastDate = sortedDates[sortedDates.length - 1];
+
+                    if (lastDate && allInventoryData[lastDate]) {
+                        // Usamos el inventario del día anterior como base
+                        const previousDayInventory = allInventoryData[lastDate];
+                        
+                        // Copiamos el stock del día anterior y reseteamos las ventas
+                        for (const productId in previousDayInventory) {
+                            newDayInventory[productId] = {
+                                stock: previousDayInventory[productId].stock || 0,
+                                sales: 0
+                            };
+                        }
+                    } else {
+                        // Si no hay días anteriores o datos, inicializamos con el stock por defecto de los productos
+                        products.forEach(p => {
+                            newDayInventory[p.id] = { stock: p.stock || 0, sales: 0 };
+                        });
+                    }
+                }
+                
+                // Aseguramos que todos los productos globales tengan una entrada, incluso si es con stock 0
+                products.forEach(p => {
+                    if (!newDayInventory[p.id]) {
+                        // Si un producto es nuevo, lo agregamos al inventario del día con stock inicial del producto
+                        // o con 0 si no se especificó.
+                        newDayInventory[p.id] = { stock: p.stock || 0, sales: 0 };
+                    }
+                });
+
+                allInventoryData[date] = newDayInventory;
+                currentDayInventory = newDayInventory;
+            }
+
+            return currentDayInventory;
+        }
+
+        // Función para guardar todos los datos en localStorage
+        function saveData() {
+            localStorage.setItem(productListKey, JSON.stringify(products));
+            localStorage.setItem(allInventoryDataKey, JSON.stringify(allInventoryData));
+            localStorage.setItem(allInvoicesKey, JSON.stringify(allInvoices));
+        }
+
+        // Función para cargar todos los datos de localStorage
+        function loadData() {
+            const savedProducts = localStorage.getItem(productListKey);
+            const savedAllInventoryData = localStorage.getItem(allInventoryDataKey);
+            const savedAllInvoices = localStorage.getItem(allInvoicesKey);
+
+            if (savedProducts) {
+                try { products = JSON.parse(savedProducts); } catch (e) { console.error("Error al parsear productos", e); products = []; }
+            } else {
+                // Productos por defecto con un stock inicial
+                products = [
+                    { name: "Sodas", id: "sodas", price: 0.50, stock: 50 },
+                    { name: "Aguas", id: "aguas", price: 0.75, stock: 40 },
+                    { name: "Paletas", id: "paletas", price: 0.25, stock: 100 },
+                    { name: "Galletas", id: "galletas", price: 0.60, stock: 75 }
+                ];
+            }
+
+            if (savedAllInventoryData) {
+                try { allInventoryData = JSON.parse(savedAllInventoryData); } catch (e) { console.error("Error al parsear inventario", e); allInventoryData = {}; }
+            } else {
+                allInventoryData = {};
+            }
+
+            if (savedAllInvoices) {
+                try { allInvoices = JSON.parse(savedAllInvoices); } catch (e) { console.error("Error al parsear facturas", e); allInvoices = {}; }
+            } else {
+                allInvoices = {};
+            }
+            
+            // Aseguramos que el inventario para la fecha actual exista y esté inicializado
+            getCurrentInventoryData();
+        }
+        
+        // Función para poblar el dropdown de productos
+        function populateProductDropdown() {
+            reloadProductSelect.innerHTML = '<option value="" disabled selected>Seleccione un producto</option>';
+            products.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product.id;
+                option.textContent = product.name;
+                reloadProductSelect.appendChild(option);
+            });
+        }
+
+        // Función para renderizar todos los productos en la página
+        function renderAllProducts() {
+            productsContainer.innerHTML = ''; // Limpiamos el contenedor
+            const inventoryData = getCurrentInventoryData();
+
+            products.forEach(product => {
+                const stock = inventoryData[product.id]?.stock || 0;
+                const sales = inventoryData[product.id]?.sales || 0;
+                const subtotal = sales * product.price;
+
+                const productDiv = document.createElement('div');
+                productDiv.id = `card-${product.id}`;
+                productDiv.className = 'product-card bg-gray-50 p-5 rounded-2xl shadow-lg flex items-center justify-between flex-wrap';
+                
+                productDiv.innerHTML = `
+                    <div class="flex-grow w-full md:w-auto">
+                        <h2 class="text-xl font-semibold text-gray-800">${product.name} <span class="text-sm font-normal text-gray-500">($${product.price.toFixed(2)})</span></h2>
+                        <p class="text-sm text-gray-500 mt-1">Inventario: <span id="stock-${product.id}" class="font-bold text-gray-700">${stock}</span></p>
+                        <p class="text-sm text-gray-500 mt-1">Vendido: <span id="sales-${product.id}" class="font-bold text-gray-700">${sales}</span></p>
+                        <p class="text-sm text-gray-500 mt-1">Total: <span id="subtotal-${product.id}" class="font-bold text-gray-700">$${subtotal.toFixed(2)}</span></p>
+                    </div>
+                    <div class="flex items-center space-x-3 mt-4 md:mt-0">
+                        <button class="decrement-btn bg-gray-200 text-gray-600 hover:bg-gray-300 p-2 rounded-full font-bold transition-colors duration-200 w-10 h-10 flex items-center justify-center text-2xl" data-product-id="${product.id}">-</button>
+                        <span class="count-display text-2xl font-bold text-gray-800 w-12 text-center">${sales}</span>
+                        <button class="increment-btn bg-blue-500 text-white hover:bg-blue-600 p-2 rounded-full font-bold transition-colors duration-200 w-10 h-10 flex items-center justify-center text-2xl" data-product-id="${product.id}">+</button>
+                        <button class="delete-btn bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-full font-bold transition-colors duration-200 w-8 h-8 flex items-center justify-center text-lg" data-product-id="${product.id}">X</button>
+                    </div>
+                `;
+                productsContainer.appendChild(productDiv);
+            });
+            populateProductDropdown();
+        }
+
+        // Función para renderizar la lista de facturas
+        function renderInvoices() {
+            invoiceList.innerHTML = '';
+            // Concatenamos todas las facturas de todas las fechas en un solo array
+            let allInvoicesArray = [];
+            for (const date in allInvoices) {
+                allInvoicesArray = allInvoicesArray.concat(allInvoices[date]);
+            }
+            allInvoicesArray.sort((a, b) => new Date(b.date) - new Date(a.date)); // Ordenar por fecha, el más reciente primero.
+            allInvoicesArray.forEach((invoice, index) => {
+                const invoiceDiv = document.createElement('div');
+                invoiceDiv.className = 'bg-gray-100 p-4 rounded-xl shadow-sm space-y-2';
+                invoiceDiv.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm text-gray-600">Fecha: <span class="font-bold">${new Date(invoice.date).toLocaleString()}</span></p>
+                        <p class="text-lg font-extrabold text-green-600">Total: $${invoice.total.toFixed(2)}</p>
+                    </div>
+                    <ul class="text-sm text-gray-500 space-y-1">
+                        ${invoice.products.map(p => `<li>${p.name}: ${p.sales} unidades ($${(p.sales * p.price).toFixed(2)})</li>`).join('')}
+                    </ul>
+                    <button class="delete-invoice-btn text-red-500 hover:text-red-700 text-xs mt-2" data-date="${invoice.date}" data-index="${index}">Eliminar Factura</button>
+                `;
+                invoiceList.appendChild(invoiceDiv);
+            });
+        }
+
+        // Función para actualizar el total de ventas del día.
+        function updateGrandTotal() {
+            let total = 0;
+            const inventoryData = getCurrentInventoryData();
+            products.forEach(product => {
+                const sales = inventoryData[product.id]?.sales || 0;
+                total += sales * product.price;
+            });
+            totalPriceElement.textContent = `$${total.toFixed(2)}`;
+        }
+
+        // Manejador de eventos para los botones de inventario, ventas y eliminación.
+        function handleProductActions(event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+            const productId = button.dataset.productId;
+            if (!productId) return;
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            const inventoryData = getCurrentInventoryData();
+            const productInventory = inventoryData[productId] || { stock: 0, sales: 0 };
+
+            // Lógica para eliminar un producto
+            if (button.classList.contains('delete-btn')) {
+                products = products.filter(p => p.id !== productId);
+                // También eliminamos los datos de inventario para este producto en todas las fechas
+                for (const date in allInventoryData) {
+                    delete allInventoryData[date][productId];
+                }
+                saveData();
+                renderAllProducts();
+                updateGrandTotal();
+                return;
+            }
+
+            // Lógica para ventas
+            if (button.classList.contains('increment-btn')) {
+                if (productInventory.stock > 0) {
+                    productInventory.stock--;
+                    productInventory.sales++;
+                } else {
+                    alert(`¡No hay más ${product.name} en inventario!`);
+                }
+            } else if (button.classList.contains('decrement-btn') && productInventory.sales > 0) {
+                productInventory.stock++;
+                productInventory.sales--;
+            }
+
+            // Actualizamos la UI
+            inventoryData[productId] = productInventory;
+            document.getElementById(`sales-${productId}`).textContent = productInventory.sales;
+            document.getElementById(`stock-${productId}`).textContent = productInventory.stock;
+            // La nueva línea para actualizar el contador grande de ventas
+            document.querySelector(`#card-${productId} .count-display`).textContent = productInventory.sales;
+            const subtotal = productInventory.sales * product.price;
+            document.getElementById(`subtotal-${productId}`).textContent = `$${subtotal.toFixed(2)}`;
+            saveData();
+            updateGrandTotal();
+        }
+        
+        // Manejador para el botón de reinicio de ventas.
+        function handleReset() {
+            const inventoryData = getCurrentInventoryData();
+            products.forEach(product => {
+                if (inventoryData[product.id]) {
+                    inventoryData[product.id].sales = 0;
+                }
+            });
+            saveData();
+            renderAllProducts();
+            updateGrandTotal();
+        }
+
+        // Manejador para el botón de agregar producto.
+        function handleAddProduct() {
+            const name = productNameInput.value.trim();
+            const price = parseFloat(productPriceInput.value);
+            const stock = parseInt(productStockInput.value);
+
+            if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0) {
+                alert("Por favor, ingrese un nombre, un precio y un inventario inicial válidos.");
+                return;
+            }
+
+            const newProductId = name.toLowerCase().replace(/[^a-z0-9]/gi, '');
+            if (products.some(p => p.id === newProductId)) {
+                alert("Ya existe un producto con un nombre similar.");
+                return;
+            }
+
+            const newProduct = { name: name, id: newProductId, price: price, stock: stock }; // Ahora guardamos el stock inicial en la definición del producto
+            products.push(newProduct);
+            
+            // Inicializar el inventario para la fecha actual
+            const inventoryData = getCurrentInventoryData();
+            inventoryData[newProductId] = { stock: stock, sales: 0 };
+
+            saveData();
+            renderAllProducts();
+            updateGrandTotal();
+            
+            productNameInput.value = '';
+            productPriceInput.value = '';
+            productStockInput.value = '';
+        }
+
+        // Manejador para guardar la venta del día como una factura
+        function handleSaveInvoice() {
+            const date = inventoryDateInput.value;
+            const inventoryData = getCurrentInventoryData();
+            
+            const total = products.reduce((sum, p) => sum + ((inventoryData[p.id]?.sales || 0) * p.price), 0);
+            
+            if (total === 0) {
+                alert("No hay ventas registradas para guardar.");
+                return;
+            }
+
+            const invoiceProducts = products
+                .filter(p => (inventoryData[p.id]?.sales || 0) > 0)
+                .map(p => ({
+                    name: p.name,
+                    price: p.price,
+                    sales: inventoryData[p.id].sales
+                }));
+
+            const newInvoice = {
+                date: new Date().toISOString(), // Usamos un timestamp para el ordenamiento
+                products: invoiceProducts,
+                total: total
+            };
+
+            if (!allInvoices[date]) {
+                allInvoices[date] = [];
+            }
+            allInvoices[date].push(newInvoice);
+            saveData();
+            renderInvoices();
+            handleReset(); // Reiniciamos los contadores de ventas después de guardar.
+            alert("Venta del día guardada exitosamente.");
+        }
+        
+        // Manejador para recargar el inventario de un producto
+        function handleReloadStock() {
+            const productId = reloadProductSelect.value;
+            const stockToAdd = parseInt(reloadQuantityInput.value);
+
+            if (!productId) {
+                alert("Por favor, seleccione un producto.");
+                return;
+            }
+
+            if (isNaN(stockToAdd) || stockToAdd <= 0) {
+                alert("Por favor, ingrese una cantidad válida para recargar.");
+                return;
+            }
+            
+            const inventoryData = getCurrentInventoryData();
+            if (inventoryData[productId]) {
+                inventoryData[productId].stock += stockToAdd;
+            } else {
+                inventoryData[productId] = { stock: stockToAdd, sales: 0 };
+            }
+            
+            saveData();
+            renderAllProducts();
+            reloadQuantityInput.value = ''; // Limpiamos el input
+            alert("Inventario recargado exitosamente.");
+        }
+
+        // Manejador para eliminar una factura del historial
+        function handleDeleteInvoice(event) {
+            const button = event.target.closest('.delete-invoice-btn');
+            if (!button) return;
+
+            // Obtiene el timestamp único de la factura desde el atributo de datos
+            const timestamp = button.dataset.date;
+            // Extrae la clave de la fecha del timestamp para acceder al array correcto
+            const dateKey = new Date(timestamp).toISOString().split('T')[0];
+
+            if (allInvoices[dateKey]) {
+                const invoiceArray = allInvoices[dateKey];
+                // Encuentra el índice de la factura a eliminar
+                const indexToDelete = invoiceArray.findIndex(inv => inv.date === timestamp);
+                
+                if (indexToDelete !== -1) {
+                    // Elimina la factura del array usando su índice
+                    invoiceArray.splice(indexToDelete, 1);
+                    
+                    // Si el array queda vacío, elimina la clave de la fecha del objeto principal
+                    if (invoiceArray.length === 0) {
+                        delete allInvoices[dateKey];
+                    }
+                    
+                    saveData();
+                    renderInvoices();
+                }
+            }
+        }
+
+        // Agregamos los event listeners después de que el DOM se haya cargado.
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            inventoryDateInput.value = today;
+
+            loadData();
+            renderAllProducts();
+            renderInvoices();
+            updateGrandTotal();
+
+            productsContainer.addEventListener('click', handleProductActions);
+            resetButton.addEventListener('click', handleReset);
+            addProductButton.addEventListener('click', handleAddProduct);
+            saveInvoiceButton.addEventListener('click', handleSaveInvoice);
+            invoiceList.addEventListener('click', handleDeleteInvoice);
+            reloadStockButton.addEventListener('click', handleReloadStock);
+            
+            // Agregamos el listener para el cambio de fecha
+            inventoryDateInput.addEventListener('change', () => {
+                loadData();
+                renderAllProducts();
+                updateGrandTotal();
+            });
+        });
+    </script>
+</body>
+</html>
