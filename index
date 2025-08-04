@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contador de otros - Jean Carlo</title>
+    <!-- Incluimos Tailwind CSS para un estilo rápido y responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Incluimos jsPDF para generar el PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        // Importamos la fuente para el PDF que incluya caracteres especiales.
+        // jsPDF usa una fuente predeterminada que no soporta tildes.
+        // Aquí se incluye una fuente en base64 para que el PDF se vea bien.
+        const FONT_BASE64 = `AAEAAAAPAIAAAwB...`; // Reemplazar con fuente real si se requiere, para este ejemplo se usa la predeterminada.
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 600px;
+        }
+        .product-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div id="app" class="container mx-auto bg-white p-6 rounded-3xl shadow-2xl space-y-6">
+        <h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6">Contador de Bebidas y Helados / Jean Cruz</h1>
+        
+        <!-- Selector de fecha -->
+        <div class="bg-gray-50 p-4 rounded-xl shadow-inner flex items-center justify-between">
+            <label for="inventory-date" class="text-xl font-bold text-gray-700">Fecha:</label>
+            <input type="date" id="inventory-date" class="p-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+        </div>
+
+        <!-- Formulario para agregar nuevos productos -->
+        <div class="bg-blue-50 p-6 rounded-2xl shadow-inner space-y-4">
+            <h2 class="text-2xl font-bold text-gray-800">Agregar Nuevo Producto</h2>
+            <div class="flex flex-col space-y-3">
+                <input type="text" id="product-name" placeholder="Nombre del producto" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                <input type="number" id="product-price" placeholder="Precio (ej: 0.50)" step="0.01" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                <button id="add-product-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                    Agregar Producto
+                </button>
+            </div>
+        </div>
+
+        <div id="products-container" class="space-y-4 mt-6">
+            <!-- Los productos se generarán dinámicamente aquí -->
+        </div>
+        
+        <div class="bg-gray-50 p-4 rounded-xl shadow-inner flex items-center justify-between">
+            <span class="text-xl font-bold text-gray-700">Total en Efectivo:</span>
+            <span id="total-price" class="text-2xl font-extrabold text-green-600">$0.00</span>
+        </div>
+        
+        <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4 mt-6">
+            <button id="generate-pdf-button" class="w-full md:w-1/2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                Generar PDF
+            </button>
+            <button id="reset-button" class="w-full md:w-1/2 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+                Reiniciar Conteo
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Clave para el almacenamiento de todos los datos por fecha.
+        const allInventoryDataKey = 'allInventoryData';
+
+        let products = [];
+        let counts = {};
+        let allData = {};
+
+        const productsContainer = document.getElementById('products-container');
+        const totalPriceElement = document.getElementById('total-price');
+        const resetButton = document.getElementById('reset-button');
+        const addProductButton = document.getElementById('add-product-button');
+        const productNameInput = document.getElementById('product-name');
+        const productPriceInput = document.getElementById('product-price');
+        const inventoryDateInput = document.getElementById('inventory-date');
+        const generatePdfButton = document.getElementById('generate-pdf-button');
+        
+        // Función para obtener la fecha actual en formato YYYY-MM-DD
+        function getTodayDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Función para guardar todos los datos en localStorage.
+        function saveData() {
+            const currentDate = inventoryDateInput.value;
+            if (!allData[currentDate]) {
+                allData[currentDate] = { products: [], counts: {} };
+            }
+            allData[currentDate].products = products;
+            allData[currentDate].counts = counts;
+            localStorage.setItem(allInventoryDataKey, JSON.stringify(allData));
+        }
+
+        // Función para cargar los datos de localStorage según la fecha.
+        function loadData() {
+            const savedData = localStorage.getItem(allInventoryDataKey);
+            if (savedData) {
+                try {
+                    allData = JSON.parse(savedData);
+                } catch (e) {
+                    console.error("Error al parsear los datos de localStorage", e);
+                    allData = {};
+                }
+            } else {
+                allData = {};
+            }
+
+            const currentDate = inventoryDateInput.value;
+            if (allData[currentDate]) {
+                products = allData[currentDate].products || [];
+                counts = allData[currentDate].counts || {};
+            } else {
+                // Si no hay datos para la fecha, usamos una lista predeterminada.
+                products = [
+                    { name: "Sodas", id: "sodas", price: 0.50 },
+                    { name: "Aguas", id: "aguas", price: 0.75 },
+                    { name: "Paletas", id: "paletas", price: 0.25 },
+                    { name: "Galletas", id: "galletas", price: 0.60 }
+                ];
+                counts = {};
+                products.forEach(product => counts[product.id] = 0);
+                saveData(); // Guardamos esta lista predeterminada para la fecha actual
+            }
+            
+            // Aseguramos que counts tenga una entrada para cada producto cargado.
+            products.forEach(product => {
+                if (counts[product.id] === undefined) {
+                    counts[product.id] = 0;
+                }
+            });
+        }
+
+        // Función para renderizar todos los productos en la página.
+        function renderAllProducts() {
+            productsContainer.innerHTML = ''; // Limpiamos el contenedor
+            products.forEach(product => {
+                const currentCount = counts[product.id] || 0;
+                const productDiv = document.createElement('div');
+                productDiv.id = `card-${product.id}`;
+                productDiv.className = 'product-card bg-gray-50 p-5 rounded-2xl shadow-lg flex items-center justify-between';
+                
+                const subtotal = currentCount * product.price;
+
+                productDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <h2 class="text-xl font-semibold text-gray-800">${product.name} <span class="text-sm font-normal text-gray-500">($${product.price.toFixed(2)})</span></h2>
+                        <p class="text-sm text-gray-500 mt-1">Total: <span id="subtotal-${product.id}" class="font-bold text-gray-700">$${subtotal.toFixed(2)}</span></p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="decrement-btn bg-gray-200 text-gray-600 hover:bg-gray-300 p-2 rounded-full font-bold transition-colors duration-200 w-10 h-10 flex items-center justify-center text-2xl" data-product-id="${product.id}">-</button>
+                        <span id="count-${product.id}" class="count-display text-2xl font-bold text-gray-800 w-12 text-center">${currentCount}</span>
+                        <button class="increment-btn bg-blue-500 text-white hover:bg-blue-600 p-2 rounded-full font-bold transition-colors duration-200 w-10 h-10 flex items-center justify-center text-2xl" data-product-id="${product.id}">+</button>
+                        <!-- Botón para eliminar producto -->
+                        <button class="delete-btn bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-full font-bold transition-colors duration-200 w-8 h-8 flex items-center justify-center text-lg" data-product-id="${product.id}">X</button>
+                    </div>
+                `;
+                productsContainer.appendChild(productDiv);
+            });
+        }
+
+        // Función para actualizar el total general en efectivo.
+        function updateGrandTotal() {
+            let total = 0;
+            products.forEach(product => {
+                const count = counts[product.id] || 0;
+                total += count * product.price;
+            });
+            totalPriceElement.textContent = `$${total.toFixed(2)}`;
+        }
+
+        // Manejador de eventos para los botones de incrementar, decrementar y eliminar.
+        function handleProductActions(event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const productId = button.dataset.productId;
+            if (!productId) return;
+
+            // Lógica para eliminar un producto.
+            if (button.classList.contains('delete-btn')) {
+                // Filtramos el array de productos para eliminar el seleccionado.
+                products = products.filter(p => p.id !== productId);
+                // Eliminamos también el conteo del objeto.
+                delete counts[productId];
+
+                // Guardamos los cambios y re-renderizamos.
+                saveData();
+                renderAllProducts();
+                updateGrandTotal();
+                return; // Salimos de la función después de eliminar.
+            }
+
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            // Lógica para incrementar o decrementar.
+            if (button.classList.contains('increment-btn')) {
+                counts[productId]++;
+            } else if (button.classList.contains('decrement-btn') && counts[productId] > 0) {
+                counts[productId]--;
+            }
+
+            // Actualizamos el display del conteo para el producto específico.
+            document.getElementById(`count-${productId}`).textContent = counts[productId];
+
+            // Calculamos y actualizamos el subtotal para el producto.
+            const subtotal = counts[productId] * product.price;
+            document.getElementById(`subtotal-${productId}`).textContent = `$${subtotal.toFixed(2)}`;
+
+            // Guardamos los cambios y actualizamos el total general.
+            saveData();
+            updateGrandTotal();
+        }
+        
+        // Manejador para el botón de reinicio.
+        function handleReset() {
+            // Reiniciamos el objeto de conteos, los displays y localStorage.
+            products.forEach(product => {
+                counts[product.id] = 0;
+            });
+            updateGrandTotal();
+            saveData(); // Guardamos los conteos reiniciados
+            renderAllProducts(); // Re-renderizamos para reflejar los cambios
+        }
+
+        // Manejador para el botón de agregar producto.
+        function handleAddProduct() {
+            const name = productNameInput.value.trim();
+            const price = parseFloat(productPriceInput.value);
+
+            // Validamos la entrada.
+            if (!name || isNaN(price) || price <= 0) {
+                // Usamos un simple mensaje para el usuario.
+                alert("Por favor, ingresa un nombre y un precio válido.");
+                return;
+            }
+
+            const newProductId = name.toLowerCase().replace(/[^a-z0-9]/gi, '');
+            if (products.some(p => p.id === newProductId)) {
+                // Usamos un simple mensaje para el usuario.
+                alert("Ya existe un producto con un nombre similar.");
+                return;
+            }
+
+            const newProduct = {
+                name: name,
+                id: newProductId,
+                price: price
+            };
+            
+            products.push(newProduct);
+            counts[newProductId] = 0;
+
+            // Guardamos los nuevos datos y re-renderizamos.
+            saveData();
+            renderAllProducts();
+            updateGrandTotal();
+            
+            // Limpiamos los campos del formulario.
+            productNameInput.value = '';
+            productPriceInput.value = '';
+        }
+        
+        // Manejador para el botón de generar PDF.
+        function handleGeneratePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const date = inventoryDateInput.value;
+            let y = 20;
+
+            // Título del reporte
+            doc.setFontSize(22);
+            doc.text("Reporte de Inventario Diario", 105, y, null, null, "center");
+            y += 10;
+            
+            // Fecha del reporte
+            doc.setFontSize(14);
+            doc.text(`Fecha: ${date}`, 105, y, null, null, "center");
+            y += 20;
+
+            doc.setFontSize(12);
+            doc.text("Producto", 10, y);
+            doc.text("Cantidad", 80, y);
+            doc.text("Subtotal", 160, y);
+            y += 5;
+            doc.line(10, y, 200, y); // Línea divisoria
+            y += 5;
+            
+            // Contenido de los productos
+            products.forEach(product => {
+                const count = counts[product.id] || 0;
+                const subtotal = count * product.price;
+                doc.text(`${product.name}`, 10, y);
+                doc.text(`${count}`, 80, y);
+                doc.text(`$${subtotal.toFixed(2)}`, 160, y);
+                y += 10;
+            });
+            
+            // Total general
+            y += 10;
+            doc.line(10, y, 200, y); // Línea divisoria
+            y += 5;
+            doc.setFontSize(14);
+            doc.text(`Total en Efectivo: $${totalPriceElement.textContent.substring(1)}`, 160, y, null, null, "right");
+
+            // Guardar el archivo PDF
+            doc.save(`Reporte_Inventario_${date}.pdf`);
+        }
+
+        // Agregamos los event listeners después de que el DOM se haya cargado.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializamos la fecha con el día de hoy
+            const today = getTodayDate();
+            inventoryDateInput.value = today;
+
+            // Cargamos los datos para la fecha de hoy
+            loadData();
+            renderAllProducts();
+            updateGrandTotal();
+
+            productsContainer.addEventListener('click', handleProductActions);
+            resetButton.addEventListener('click', handleReset);
+            addProductButton.addEventListener('click', handleAddProduct);
+            inventoryDateInput.addEventListener('change', () => {
+                loadData();
+                renderAllProducts();
+                updateGrandTotal();
+            });
+            generatePdfButton.addEventListener('click', handleGeneratePDF);
+        });
+    </script>
+</body>
+</html>
