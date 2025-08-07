@@ -25,7 +25,7 @@
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
     <div id="app" class="container mx-auto bg-white p-6 rounded-3xl shadow-2xl space-y-6">
-        <h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6">Control de Bebidas y Helados - Jean Cruz</h1>
+        <h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6">Control de Inventario y Ventas</h1>
         
         <!-- Selector de fecha -->
         <div class="bg-gray-50 p-4 rounded-xl shadow-inner flex items-center justify-between">
@@ -33,8 +33,13 @@
             <input type="date" id="inventory-date" class="p-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all duration-200">
         </div>
 
-        <!-- Formulario para agregar nuevos productos -->
-        <div class="bg-blue-50 p-6 rounded-2xl shadow-inner space-y-4">
+        <!-- Botón para alternar la visibilidad de "Agregar Nuevo Producto" -->
+        <button id="toggle-add-product-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+            Mostrar Agregar Producto
+        </button>
+
+        <!-- Formulario para agregar nuevos productos (OCULTO por defecto) -->
+        <div id="add-product-form" class="hidden bg-blue-50 p-6 rounded-2xl shadow-inner space-y-4">
             <h2 class="text-2xl font-bold text-gray-800">Agregar Nuevo Producto</h2>
             <div class="flex flex-col space-y-3">
                 <input type="text" id="product-name" placeholder="Nombre del producto" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
@@ -46,8 +51,13 @@
             </div>
         </div>
 
-        <!-- Formulario para recargar inventario -->
-        <div class="bg-green-50 p-6 rounded-2xl shadow-inner space-y-4">
+        <!-- Botón para alternar la visibilidad de "Recargar Inventario" -->
+        <button id="toggle-reload-stock-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg transition-all duration-200 ease-in-out transform hover:scale-105">
+            Mostrar Recargar Inventario
+        </button>
+
+        <!-- Formulario para recargar inventario (OCULTO por defecto) -->
+        <div id="reload-stock-form" class="hidden bg-green-50 p-6 rounded-2xl shadow-inner space-y-4">
             <h2 class="text-2xl font-bold text-gray-800">Recargar Inventario</h2>
             <div class="flex flex-col space-y-3">
                 <select id="reload-product-select" class="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
@@ -86,13 +96,14 @@
                 <!-- Las facturas se cargarán aquí -->
             </div>
         </div>
+        
     </div>
 
     <script>
         // Claves para localStorage
-        const productListKey = 'productList'; // Lista global de productos
-        const allInventoryDataKey = 'allInventoryData'; // Inventario y ventas por fecha
-        const allInvoicesKey = 'allInvoices'; // Facturas por fecha
+        const productListKey = 'productList'; 
+        const allInventoryDataKey = 'allInventoryData'; 
+        const allInvoicesKey = 'allInvoices'; 
 
         // Variables de estado
         let products = [];
@@ -114,6 +125,13 @@
         const reloadProductSelect = document.getElementById('reload-product-select');
         const reloadQuantityInput = document.getElementById('reload-quantity-input');
         const reloadStockButton = document.getElementById('reload-stock-button');
+
+        // Nuevos elementos para alternar la visibilidad de los formularios
+        const toggleAddProductButton = document.getElementById('toggle-add-product-button');
+        const addProductForm = document.getElementById('add-product-form');
+        const toggleReloadStockButton = document.getElementById('toggle-reload-stock-button');
+        const reloadStockForm = document.getElementById('reload-stock-form');
+
 
         // Obtiene el objeto de inventario y ventas para la fecha actual
         function getCurrentInventoryData() {
@@ -166,22 +184,22 @@
         }
 
         // Función para guardar todos los datos en localStorage
+        // Esta función ahora es la principal para la persistencia de datos.
         function saveData() {
             localStorage.setItem(productListKey, JSON.stringify(products));
             localStorage.setItem(allInventoryDataKey, JSON.stringify(allInventoryData));
             localStorage.setItem(allInvoicesKey, JSON.stringify(allInvoices));
         }
 
-        // Función para cargar todos los datos de localStorage
+        // Función para cargar los datos desde localStorage
         function loadData() {
-            const savedProducts = localStorage.getItem(productListKey);
-            const savedAllInventoryData = localStorage.getItem(allInventoryDataKey);
-            const savedAllInvoices = localStorage.getItem(allInvoicesKey);
+            const storedProducts = localStorage.getItem(productListKey);
+            const storedInventoryData = localStorage.getItem(allInventoryDataKey);
+            const storedInvoices = localStorage.getItem(allInvoicesKey);
 
-            if (savedProducts) {
-                try { products = JSON.parse(savedProducts); } catch (e) { console.error("Error al parsear productos", e); products = []; }
+            if (storedProducts) {
+                products = JSON.parse(storedProducts);
             } else {
-                // Productos por defecto con un stock inicial
                 products = [
                     { name: "POWER 1L", id: "power_1l", price: 1.25, stock: 100 },
                     { name: "GATORADE 1L", id: "gatorade_1l", price: 1.25, stock: 100 },
@@ -204,20 +222,34 @@
                     { name: "BOLSA DE AGUA X2", id: "bolsa_de_agua_x2", price: 0.25, stock: 100 },
                     { name: "RAPTOR", id: "raptor", price: 1.00, stock: 100 },
                     { name: "PILSENER SALA", id: "pilsener_sala", price: 1.50, stock: 100 },
-                    { name: "FRUTADO", id: "frutado", price: 0.50, stock: 100 }
+                    { name: "FRUTADO", id: "frutado", price: 0.50, stock: 100 },
+                    { name: "DE LA GRANJA PEQUEÑO", id: "de_la_granja_pequeno", price: 0.60, stock: 100 },
+                    { name: "DE LA GRANJA GRANDE", id: "de_la_granja_grande", price: 1.00, stock: 100 },
+                    { name: "COPA SUNDAE", id: "copa_sundae", price: 1.50, stock: 100 },
+                    { name: "VASITO", id: "vasito", price: 0.75, stock: 100 },
+                    { name: "CONO SUNDAE", id: "cono_sundae", price: 1.00, stock: 100 },
+                    { name: "CHOCOCONO", id: "chocono", price: 1.00, stock: 100 },
+                    { name: "CHOCO CONITO", id: "choco_conito", price: 0.35, stock: 100 },
+                    { name: "GIGA ALMENDRA", id: "giga_almendra", price: 1.50, stock: 100 },
+                    { name: "GIGA CLASICA", id: "giga_clasica", price: 1.50, stock: 100 },
+                    { name: "GIGA NEGRA", id: "giga_negra", price: 1.50, stock: 100 },
+                    { name: "GIGA NEGRA CRISPY", id: "giga_negra_crispy", price: 1.50, stock: 100 },
+                    { name: "BLOCK", id: "block", price: 0.85, stock: 100 },
+                    { name: "SANDWICH", id: "sandwich", price: 1.00, stock: 100 },
+                    { name: "SANDWICHITO", id: "sandwichito", price: 1.00, stock: 100 },
+                    { name: "SANDIA", id: "sandia", price: 0.75, stock: 100 },
+                    { name: "HELADO TIPO CASERO", id: "helado_tipo_casero", price: 0.75, stock: 100 },
+                    { name: "CREMOSA", id: "cremosa", price: 0.85, stock: 100 },
+                    { name: "PALITO", id: "palito", price: 0.35, stock: 100 },
+                    { name: "FRUTA", id: "fruta", price: 0.75, stock: 100 }
                 ];
             }
-
-            if (savedAllInventoryData) {
-                try { allInventoryData = JSON.parse(savedAllInventoryData); } catch (e) { console.error("Error al parsear inventario", e); allInventoryData = {}; }
-            } else {
-                allInventoryData = {};
+            
+            if (storedInventoryData) {
+                allInventoryData = JSON.parse(storedInventoryData);
             }
-
-            if (savedAllInvoices) {
-                try { allInvoices = JSON.parse(savedAllInvoices); } catch (e) { console.error("Error al parsear facturas", e); allInvoices = {}; }
-            } else {
-                allInvoices = {};
+            if (storedInvoices) {
+                allInvoices = JSON.parse(storedInvoices);
             }
             
             // Aseguramos que el inventario para la fecha actual exista y esté inicializado
@@ -323,7 +355,7 @@
                 for (const date in allInventoryData) {
                     delete allInventoryData[date][productId];
                 }
-                saveData();
+                saveData(); // Guardamos el cambio en el localStorage
                 renderAllProducts();
                 updateGrandTotal();
                 return;
@@ -335,7 +367,8 @@
                     productInventory.stock--;
                     productInventory.sales++;
                 } else {
-                    alert(`¡No hay más ${product.name} en inventario!`);
+                    // No usamos alert(), usamos un mensaje en la UI
+                    showFeedback("¡No hay más " + product.name + " en inventario!", "error");
                 }
             } else if (button.classList.contains('decrement-btn') && productInventory.sales > 0) {
                 productInventory.stock++;
@@ -350,7 +383,7 @@
             document.querySelector(`#card-${productId} .count-display`).textContent = productInventory.sales;
             const subtotal = productInventory.sales * product.price;
             document.getElementById(`subtotal-${productId}`).textContent = `$${subtotal.toFixed(2)}`;
-            saveData();
+            saveData(); // Guardamos el cambio en el localStorage
             updateGrandTotal();
         }
         
@@ -362,7 +395,7 @@
                     inventoryData[product.id].sales = 0;
                 }
             });
-            saveData();
+            saveData(); // Guardamos el cambio en el localStorage
             renderAllProducts();
             updateGrandTotal();
         }
@@ -374,13 +407,13 @@
             const stock = parseInt(productStockInput.value);
 
             if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0) {
-                alert("Por favor, ingrese un nombre, un precio y un inventario inicial válidos.");
+                showFeedback("Por favor, ingrese un nombre, un precio y un inventario inicial válidos.", "error");
                 return;
             }
 
             const newProductId = name.toLowerCase().replace(/[^a-z0-9]/gi, '');
             if (products.some(p => p.id === newProductId)) {
-                alert("Ya existe un producto con un nombre similar.");
+                showFeedback("Ya existe un producto con un nombre similar.", "error");
                 return;
             }
 
@@ -391,7 +424,7 @@
             const inventoryData = getCurrentInventoryData();
             inventoryData[newProductId] = { stock: stock, sales: 0 };
 
-            saveData();
+            saveData(); // Guardamos el cambio en el localStorage
             renderAllProducts();
             updateGrandTotal();
             
@@ -408,7 +441,7 @@
             const total = products.reduce((sum, p) => sum + ((inventoryData[p.id]?.sales || 0) * p.price), 0);
             
             if (total === 0) {
-                alert("No hay ventas registradas para guardar.");
+                showFeedback("No hay ventas registradas para guardar.", "warning");
                 return;
             }
 
@@ -430,10 +463,10 @@
                 allInvoices[date] = [];
             }
             allInvoices[date].push(newInvoice);
-            saveData();
+            saveData(); // Guardamos el cambio en el localStorage
             renderInvoices();
             handleReset(); // Reiniciamos los contadores de ventas después de guardar.
-            alert("Venta del día guardada exitosamente.");
+            showFeedback("Venta del día guardada exitosamente.", "success");
         }
         
         // Manejador para recargar el inventario de un producto
@@ -442,12 +475,12 @@
             const stockToAdd = parseInt(reloadQuantityInput.value);
 
             if (!productId) {
-                alert("Por favor, seleccione un producto.");
+                showFeedback("Por favor, seleccione un producto.", "error");
                 return;
             }
 
             if (isNaN(stockToAdd) || stockToAdd <= 0) {
-                alert("Por favor, ingrese una cantidad válida para recargar.");
+                showFeedback("Por favor, ingrese una cantidad válida para recargar.", "error");
                 return;
             }
             
@@ -458,10 +491,10 @@
                 inventoryData[productId] = { stock: stockToAdd, sales: 0 };
             }
             
-            saveData();
+            saveData(); // Guardamos el cambio en el localStorage
             renderAllProducts();
             reloadQuantityInput.value = ''; // Limpiamos el input
-            alert("Inventario recargado exitosamente.");
+            showFeedback("Inventario recargado exitosamente.", "success");
         }
 
         // Manejador para eliminar una factura del historial
@@ -488,17 +521,49 @@
                         delete allInvoices[dateKey];
                     }
                     
-                    saveData();
+                    saveData(); // Guardamos el cambio en el localStorage
                     renderInvoices();
                 }
             }
         }
+        
+        // Función para mostrar mensajes de retroalimentación en lugar de `alert()`
+        function showFeedback(message, type = "info") {
+            const feedbackContainer = document.createElement('div');
+            feedbackContainer.className = `fixed bottom-4 left-1/2 -translate-x-1/2 p-4 rounded-xl shadow-lg text-white font-bold transition-opacity duration-300 z-50`;
+            
+            switch (type) {
+                case "success":
+                    feedbackContainer.classList.add('bg-green-500');
+                    break;
+                case "error":
+                    feedbackContainer.classList.add('bg-red-500');
+                    break;
+                case "warning":
+                    feedbackContainer.classList.add('bg-yellow-500');
+                    break;
+                case "info":
+                default:
+                    feedbackContainer.classList.add('bg-blue-500');
+                    break;
+            }
+            
+            feedbackContainer.textContent = message;
+            document.body.appendChild(feedbackContainer);
+            
+            setTimeout(() => {
+                feedbackContainer.classList.add('opacity-0');
+                feedbackContainer.addEventListener('transitionend', () => feedbackContainer.remove());
+            }, 3000);
+        }
+
 
         // Agregamos los event listeners después de que el DOM se haya cargado.
         document.addEventListener('DOMContentLoaded', () => {
             const today = new Date().toISOString().split('T')[0];
             inventoryDateInput.value = today;
 
+            // En lugar de cargar desde un archivo, ahora cargamos desde localStorage
             loadData();
             renderAllProducts();
             renderInvoices();
@@ -513,9 +578,22 @@
             
             // Agregamos el listener para el cambio de fecha
             inventoryDateInput.addEventListener('change', () => {
-                loadData();
+                // Se actualizan los datos de la fecha al cambiarla
                 renderAllProducts();
                 updateGrandTotal();
+            });
+            
+            // Agregamos los listeners para los botones de alternar visibilidad
+            toggleAddProductButton.addEventListener('click', () => {
+                addProductForm.classList.toggle('hidden');
+                const isHidden = addProductForm.classList.contains('hidden');
+                toggleAddProductButton.textContent = isHidden ? 'Mostrar Agregar Producto' : 'Ocultar Agregar Producto';
+            });
+
+            toggleReloadStockButton.addEventListener('click', () => {
+                reloadStockForm.classList.toggle('hidden');
+                const isHidden = reloadStockForm.classList.contains('hidden');
+                toggleReloadStockButton.textContent = isHidden ? 'Mostrar Recargar Inventario' : 'Ocultar Recargar Inventario';
             });
         });
     </script>
